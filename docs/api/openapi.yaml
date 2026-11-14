@@ -1,0 +1,600 @@
+openapi: 3.0.3
+
+info:
+  title: Учебный сервис проверки репозиториев
+  version: 1.0.0
+  description: >
+    API создаёт задания на проверку публичных учебных репозиториев GitHub
+    и возвращает их состояние и сохранённые результаты.
+
+paths:
+  /jobs:
+    post:
+      operationId: createJob
+      summary: Создать задание на проверку репозитория
+      description: >
+        Для нового ключа идемпотентности сервис сохраняет задание и возвращает
+        его идентификатор. Обработка выполняется после создания задания.
+        Повтор запроса с тем же ключом и теми же параметрами возвращает ранее
+        созданное задание и не запускает повторную обработку. Если параметры
+        отличаются, сервис возвращает конфликт и не изменяет существующее
+        задание. Размер JSON-тела не должен превышать 65536 байт.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Уникальный ключ идемпотентности, не длиннее 128 символов.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+      requestBody:
+        required: true
+        description: Размер всего JSON-тела не должен превышать 65536 байт.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+            example:
+              repository_url: https://github.com/example/coursework
+              profile: basic
+      responses:
+        "202":
+          description: Задание сохранено и принято в обработку.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobReference"
+              example:
+                id: job-123
+                status: created
+                status_url: /jobs/job-123
+                created_at: "2026-11-10T12:00:00Z"
+                updated_at: "2026-11-10T12:00:00Z"
+        "200":
+          description: >
+            Ключ уже использовался с теми же параметрами. Возвращено ранее
+            созданное задание; новая обработка не запускается.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobReference"
+              example:
+                id: job-123
+                status: done
+                status_url: /jobs/job-123
+                created_at: "2026-11-10T12:00:00Z"
+                updated_at: "2026-11-10T12:02:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Ключ идемпотентности использован с другими параметрами.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: idempotency_key_conflict
+                  message: Idempotency-Key was already used with different parameters.
+                  details:
+                    - field: repository_url
+                      issue: Value differs from the request previously used with this key.
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: Запрос содержит недопустимые параметры.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalidRepositoryUrl:
+                  summary: Недопустимая ссылка на репозиторий
+                  value:
+                    error:
+                      code: validation_error
+                      message: Request validation failed.
+                      details:
+                        - field: repository_url
+                          issue: Must be a valid public GitHub repository URL.
+                unsupportedProfile:
+                  summary: Профиль не поддерживается
+                  value:
+                    error:
+                      code: validation_error
+                      message: Request validation failed.
+                      details:
+                        - field: profile
+                          issue: Only the basic profile is supported.
+                idempotencyKeyTooLong:
+                  summary: Ключ идемпотентности превышает лимит
+                  value:
+                    error:
+                      code: validation_error
+                      message: Request validation failed.
+                      details:
+                        - field: Idempotency-Key
+                          issue: Must not exceed 128 characters.
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /jobs/{job_id}:
+    get:
+      operationId: getJob
+      summary: Получить состояние задания и результат
+      description: >
+        Возвращает сохранённое состояние задания. Для created и running
+        отчёта нет. Для done возвращается сохранённый формальный отчёт и
+        отдельно состояние рекомендаций. Для failed возвращается сохранённая
+        причина технического отказа; отчёт отсутствует. Повторный запрос
+        не запускает новую обработку и не обращается к GitHub для повторного
+        анализа. Переходы между состояниями через этот API не предоставляются.
+        Ошибки GitHub отражаются как причина состояния failed, а не как
+        HTTP-код ответа этого запроса.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          description: Идентификатор ранее созданного задания.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Задание найдено; ответ содержит представление его текущего состояния.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatusResponse"
+              examples:
+                running:
+                  summary: Задание обрабатывается
+                  value:
+                    id: job-123
+                    status: running
+                    created_at: "2026-11-10T12:00:00Z"
+                    updated_at: "2026-11-10T12:01:00Z"
+                done:
+                  summary: Проверка завершена, отчёт сохранён
+                  value:
+                    id: job-123
+                    status: done
+                    created_at: "2026-11-10T12:00:00Z"
+                    updated_at: "2026-11-10T12:02:00Z"
+                    report:
+                      job_id: job-123
+                      repository_url: https://github.com/example/coursework
+                      profile: basic
+                      commit_sha: abc123
+                      requirements_met: true
+                      checks:
+                        - check_name: file:README.md
+                          status: true
+                          details: Файл README.md присутствует в корне репозитория.
+                        - check_name: file:CONTRIBUTING.md
+                          status: true
+                          details: Файл CONTRIBUTING.md присутствует в корне репозитория.
+                        - check_name: "section:README.md:Описание проекта"
+                          status: true
+                          details: Раздел найден.
+                        - check_name: "section:README.md:Запуск"
+                          status: true
+                          details: Раздел найден.
+                        - check_name: "section:README.md:Тестирование"
+                          status: true
+                          details: Раздел найден.
+                    recommendations:
+                      status: ready
+                      items:
+                        - Добавьте в README примеры использования проекта.
+                failed:
+                  summary: Не удалось получить репозиторий через GitHub API
+                  value:
+                    id: job-123
+                    status: failed
+                    created_at: "2026-11-10T12:00:00Z"
+                    updated_at: "2026-11-10T12:02:00Z"
+                    failure:
+                      code: github_rate_limited
+                      message: GitHub API rate limit exceeded.
+        "404":
+          description: Задание с таким идентификатором не найдено.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: job_not_found
+                  message: Job was not found.
+                  details:
+                    - field: job_id
+                      issue: No job exists with this ID.
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  schemas:
+    CreateJobRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - repository_url
+        - profile
+      properties:
+        repository_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Ссылка на публичный репозиторий GitHub.
+          example: https://github.com/example/coursework
+        profile:
+          type: string
+          maxLength: 64
+          enum:
+            - basic
+          description: Профиль проверки. В первой версии поддерживается basic.
+
+    JobReference:
+      type: object
+      required:
+        - id
+        - status
+        - status_url
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Идентификатор задания.
+        status:
+          $ref: "#/components/schemas/JobState"
+        status_url:
+          type: string
+          format: uri-reference
+          description: Относительный адрес для получения состояния и результата.
+          example: /jobs/job-123
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    JobStatusResponse:
+      oneOf:
+        - $ref: "#/components/schemas/JobInProgress"
+        - $ref: "#/components/schemas/JobDone"
+        - $ref: "#/components/schemas/JobFailed"
+      description: >
+        Представление задания зависит от состояния: у created и running
+        нет отчёта; у done есть сохранённый отчёт; у failed есть причина
+        технического отказа, но нет отчёта.
+
+    JobInProgress:
+      type: object
+      required:
+        - id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - created
+            - running
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    JobDone:
+      type: object
+      required:
+        - id
+        - status
+        - created_at
+        - updated_at
+        - report
+        - recommendations
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - done
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        report:
+          $ref: "#/components/schemas/FormalReport"
+        recommendations:
+          $ref: "#/components/schemas/Recommendations"
+
+    JobFailed:
+      type: object
+      required:
+        - id
+        - status
+        - created_at
+        - updated_at
+        - failure
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - failed
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        failure:
+          $ref: "#/components/schemas/JobFailure"
+
+    JobState:
+      type: string
+      enum:
+        - created
+        - running
+        - done
+        - failed
+
+    FormalReport:
+      type: object
+      required:
+        - job_id
+        - repository_url
+        - profile
+        - commit_sha
+        - requirements_met
+        - checks
+      properties:
+        job_id:
+          type: string
+          description: Идентификатор задания, к которому относится отчёт.
+        repository_url:
+          type: string
+          format: uri
+        profile:
+          type: string
+          enum:
+            - basic
+        commit_sha:
+          type: string
+          minLength: 1
+          description: SHA единственного коммита, по которому выполнены проверки.
+        requirements_met:
+          type: boolean
+          description: >
+            true, если формальные требования выполнены; false, если проверки
+            завершились, но обнаружили нарушения.
+        checks:
+          type: array
+          minItems: 5
+          maxItems: 5
+          description: >
+            Пять результатов профиля basic. Значения check_name уникальны
+            в пределах отчёта. Нарушение требования отражается status: false
+            и не переводит Job в failed.
+          items:
+            $ref: "#/components/schemas/CheckResult"
+
+    CheckResult:
+      type: object
+      required:
+        - check_name
+        - status
+        - details
+      properties:
+        check_name:
+          type: string
+          enum:
+            - "file:README.md"
+            - "file:CONTRIBUTING.md"
+            - "section:README.md:Описание проекта"
+            - "section:README.md:Запуск"
+            - "section:README.md:Тестирование"
+        status:
+          type: boolean
+          description: true — требование выполнено; false — найдено нарушение.
+        details:
+          type: string
+          minLength: 1
+          description: Пояснение результата проверки.
+
+    JobFailure:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          $ref: "#/components/schemas/JobFailureCode"
+        message:
+          type: string
+          minLength: 1
+          description: Понятное описание сохранённой причины технического отказа.
+
+    JobFailureCode:
+      type: string
+      description: >
+        Причина отказа GitHub API. HTTP 404 от GitHub отображается как
+        repository_not_found. HTTP 429 и HTTP 403 с признаками превышения
+        лимита отображаются как github_rate_limited. Остальные HTTP 403
+        отображаются как github_access_denied. HTTP 5xx, таймаут и сетевой
+        отказ отображаются как github_unavailable. Если HTTP 403 нельзя
+        отличить от превышения лимита, используется github_access_denied.
+      enum:
+        - repository_not_found
+        - github_access_denied
+        - github_rate_limited
+        - github_unavailable
+
+    Recommendations:
+      oneOf:
+        - $ref: "#/components/schemas/RecommendationsPending"
+        - $ref: "#/components/schemas/RecommendationsReady"
+        - $ref: "#/components/schemas/RecommendationsFailed"
+      description: >
+        Рекомендации хранятся отдельно от формального отчёта. Их сбой не
+        изменяет состояние Job и не удаляет готовый формальный отчёт.
+
+    RecommendationsPending:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - pending
+
+    RecommendationsReady:
+      type: object
+      required:
+        - status
+        - items
+      properties:
+        status:
+          type: string
+          enum:
+            - ready
+        items:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          description: Рекомендации, сформированные по результатам проверок и README.
+
+    RecommendationsFailed:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          enum:
+            - failed
+        error:
+          $ref: "#/components/schemas/RecommendationError"
+
+    RecommendationError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: recommendation_generation_failed
+        message:
+          type: string
+          minLength: 1
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - details
+          properties:
+            code:
+              type: string
+              description: Машиночитаемый код ошибки API.
+            message:
+              type: string
+              description: Краткое описание ошибки.
+            details:
+              type: array
+              description: Ошибочные поля и пояснения; может быть пустым.
+              items:
+                $ref: "#/components/schemas/ErrorDetail"
+
+    ErrorDetail:
+      type: object
+      required:
+        - field
+        - issue
+      properties:
+        field:
+          type: string
+          description: Имя ошибочного поля или параметра запроса.
+        issue:
+          type: string
+          description: Что именно не так с полем.
+
+  responses:
+    BadRequest:
+      description: Тело запроса не является корректным JSON.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: invalid_json
+              message: Request body is not valid JSON.
+              details: []
+
+    PayloadTooLarge:
+      description: Размер JSON-тела превышает 65536 байт.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: payload_too_large
+              message: Request body must not exceed 65536 bytes.
+              details:
+                - field: request_body
+                  issue: Maximum size is 65536 bytes.
+
+    UnsupportedMediaType:
+      description: Запрос должен иметь Content-Type application/json.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: unsupported_media_type
+              message: Content-Type must be application/json.
+              details:
+                - field: Content-Type
+                  issue: Unsupported media type.
+
+    InternalServerError:
+      description: Внутренняя ошибка API или хранилища.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: internal_error
+              message: Internal server error.
+              details: []
+
