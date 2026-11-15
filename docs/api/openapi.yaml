@@ -113,7 +113,7 @@ paths:
                   summary: Ключ идемпотентности превышает лимит
                   value:
                     error:
-                      code: validation_error
+                      code: field_too_long
                       message: Request validation failed.
                       details:
                         - field: Idempotency-Key
@@ -440,6 +440,8 @@ components:
         отображаются как github_access_denied. HTTP 5xx, таймаут и сетевой
         отказ отображаются как github_unavailable. Если HTTP 403 нельзя
         отличить от превышения лимита, используется github_access_denied.
+        `interrupted` — задание прервано перезапуском сервиса
+        , не является отказом GitHub.
       enum:
         - repository_not_found
         - github_access_denied
