@@ -1,4 +1,4 @@
-
+import re
 from core.tool_contract import (
     CheckResult,
     ToolCall,
@@ -31,6 +31,7 @@ class RequiredFilesTool:
                 not isinstance(path, str)
                 or not path
                 or path.startswith("/")
+                or re.match(r"^[A-Za-z]:", path)
                 or "\\" in path
                 or any(
                     part in ("", ".", "..")

@@ -250,6 +250,13 @@ def test_incomplete_snapshot_returns_error():
             },
             "params.required_sections[0]",
         ),
+        (
+            {
+                "readme_path": "C:/README.md",
+                "required_sections": ["Запуск"],
+            },
+            "params.readme_path",
+        ),
     ],
 )
 def test_invalid_parameters(snapshot, params, expected_field):

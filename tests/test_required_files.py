@@ -94,6 +94,7 @@ def test_missing_readme_returns_failed_check():
         (["/README.md"], "params.required_paths[0]"),
         ([""], "params.required_paths[0]"),
         ([123], "params.required_paths[0]"),
+(["C:/README.md"], "params.required_paths[0]"),
     ],
 )
 def test_invalid_required_paths(

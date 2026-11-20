@@ -83,11 +83,13 @@ class ReadmeSectionsTool:
         required_sections = params.get("required_sections")
 
         # Проверяем путь README.
+
         if (
             not isinstance(readme_path, str)
             or not readme_path
             or readme_path != readme_path.strip()
             or readme_path.startswith("/")
+            or re.match(r"^[A-Za-z]:", readme_path)
             or "\\" in readme_path
             or any(
                 part in ("", ".", "..")
@@ -99,6 +101,7 @@ class ReadmeSectionsTool:
                 message="Некорректный путь README.",
                 details={"field": "params.readme_path"},
             )
+
 
         # Проверяем список обязательных разделов.
         if (
