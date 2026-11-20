@@ -1,6 +1,7 @@
 
 import pytest
 
+
 from core.readme_sections import ReadmeSectionsTool
 from core.tool_contract import (
     RepositorySnapshot,
@@ -272,3 +273,101 @@ def test_invalid_parameters(snapshot, params, expected_field):
     assert result.details is not None
     assert result.details["field"] == expected_field
     assert result.message
+
+
+@pytest.mark.parametrize(
+    "invalid_params",
+    [
+        None,
+        [],
+        "wrong_params",
+    ],
+)
+def test_invalid_params_type_returns_error(snapshot, invalid_params):
+    # Arrange
+    # Намеренно передаём некорректный тип для проверки валидации.
+    # noinspection PyTypeChecker
+    call = ToolCall(
+        snapshot=snapshot,
+        params=invalid_params,
+    )
+
+
+    # Act
+    result = ReadmeSectionsTool().execute(call)
+
+    # Assert
+    assert isinstance(result, ToolError)
+    assert result.code == "invalid_tool_parameters"
+    assert result.details is not None
+    assert result.details["field"] == "params"
+    assert result.message
+
+def test_heading_inside_html_comment_is_ignored():
+    # Arrange
+    snapshot = RepositorySnapshot(
+        repository_url="https://github.com/example/project",
+        commit_sha="abc123",
+        paths=("README.md",),
+        text_files={
+            "README.md": (
+                "# Проект\n"
+                "<!--\n"
+                "## Запуск\n"
+                "-->\n"
+                "## Тестирование\n"
+            )
+        },
+    )
+
+    call = ToolCall(
+        snapshot=snapshot,
+        params={
+            "readme_path": "README.md",
+            "required_sections": ["Запуск", "Тестирование"],
+        },
+    )
+
+    # Act
+    result = ReadmeSectionsTool().execute(call)
+
+    # Assert
+    assert isinstance(result, ToolResult)
+    assert [item.status for item in result.results] == [
+        False, True
+    ]
+
+
+@pytest.mark.parametrize(
+    "readme_text, expected_status",
+    [
+        ("## Запуск <!-- комментарий -->\n", True),
+        ("<!-- ## Запуск -->\n", False),
+        ("~~~markdown\n## Запуск\n~~~\n", False),
+    ],
+)
+def test_markdown_comment_and_fence_cases(
+    readme_text, expected_status
+):
+    # Arrange
+    snapshot = RepositorySnapshot(
+        repository_url="https://github.com/example/project",
+        commit_sha="abc123",
+        paths=("README.md",),
+        text_files={"README.md": readme_text},
+    )
+
+    call = ToolCall(
+        snapshot=snapshot,
+        params={
+            "readme_path": "README.md",
+            "required_sections": ["Запуск"],
+        },
+    )
+
+    # Act
+    result = ReadmeSectionsTool().execute(call)
+
+    # Assert
+    assert isinstance(result, ToolResult)
+    assert result.results[0].status is expected_status

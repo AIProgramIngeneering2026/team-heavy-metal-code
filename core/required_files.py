@@ -11,7 +11,16 @@ class RequiredFilesTool:
     name = "required_files"
 
     def execute(self, call: ToolCall) -> ToolResult | ToolError:
+
+        if not isinstance(call.params, dict):
+            return ToolError(
+                code="invalid_tool_parameters",
+                message="Параметры инструмента должны быть объектом.",
+                details={"field": "params"},
+            )
+
         params = call.params
+
 
         # Проверяем наличие списка обязательных файлов.
         required_paths = params.get("required_paths")

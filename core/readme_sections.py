@@ -15,6 +15,7 @@ def _extract_headings(text: str) -> set[str]:
     fence_char = None
     fence_size = 0
     previous = None
+    comment_open = False
 
     for line in text.splitlines():
         # Пропускаем содержимое ограждённых блоков кода.
@@ -28,6 +29,25 @@ def _extract_headings(text: str) -> set[str]:
                 fence_char = None
             previous = None
             continue
+
+        # Исключаем HTML-комментарии, включая многострочные.
+        if comment_open:
+            if "-->" not in line:
+                previous = None
+                continue
+
+            line = line.split("-->", 1)[1]
+            comment_open = False
+
+        while "<!--" in line:
+            before, _, after = line.partition("<!--")
+
+            if "-->" not in after:
+                comment_open = True
+                line = before
+                break
+
+            line = before + after.split("-->", 1)[1]
 
         opening = re.match(r" {0,3}(`{3,}|~{3,})(.*)$", line)
         if opening:
@@ -78,7 +98,16 @@ class ReadmeSectionsTool:
     name = "readme_sections"
 
     def execute(self, call: ToolCall) -> ToolResult | ToolError:
+
+        if not isinstance(call.params, dict):
+            return ToolError(
+                code="invalid_tool_parameters",
+                message="Параметры инструмента должны быть объектом.",
+                details={"field": "params"},
+            )
+
         params = call.params
+
         readme_path = params.get("readme_path")
         required_sections = params.get("required_sections")
 

@@ -1,6 +1,7 @@
 
 import pytest
 
+
 from core.required_files import RequiredFilesTool
 from core.tool_contract import (
     RepositorySnapshot,
@@ -94,7 +95,7 @@ def test_missing_readme_returns_failed_check():
         (["/README.md"], "params.required_paths[0]"),
         ([""], "params.required_paths[0]"),
         ([123], "params.required_paths[0]"),
-(["C:/README.md"], "params.required_paths[0]"),
+        (["C:/README.md"], "params.required_paths[0]"),
     ],
 )
 def test_invalid_required_paths(
@@ -114,3 +115,33 @@ def test_invalid_required_paths(
     assert result.code == "invalid_tool_parameters"
     assert result.details["field"] == expected_field
     assert result.message
+
+
+
+@pytest.mark.parametrize(
+    "invalid_params",
+    [
+        None,
+        [],
+        "wrong_params",
+    ],
+)
+def test_invalid_params_type_returns_error(snapshot, invalid_params):
+    # Arrange
+    # Намеренно передаём некорректный тип для проверки валидации.
+    # noinspection PyTypeChecker
+    call = ToolCall(
+        snapshot=snapshot,
+        params=invalid_params,
+    )
+
+    # Act
+    result = RequiredFilesTool().execute(call)
+
+    # Assert
+    assert isinstance(result, ToolError)
+    assert result.code == "invalid_tool_parameters"
+    assert result.details is not None
+    assert result.details["field"] == "params"
+    assert result.message
+
