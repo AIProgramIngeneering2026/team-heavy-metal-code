@@ -1,3 +1,4 @@
+
 # PyCharm
 .idea/
 
@@ -13,8 +14,3 @@ __pycache__/
 .env
 .env.*
 !.env.example
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
