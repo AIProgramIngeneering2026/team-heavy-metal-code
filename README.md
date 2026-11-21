@@ -51,3 +51,47 @@
 ## Требования
 
 Основной сценарий и критерии приёмки описаны в [docs/requirements.md](docs/requirements.md).
+
+## Подготовка окружения
+
+Для доменного ядра нужен Python 3.11 или новее. HTTP API, база данных и сетевые обращения для запуска тестов ядра не требуются.
+
+Из корня репозитория создайте виртуальное окружение:
+
+```shell
+python -m venv .venv
+```
+
+Активируйте его в PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Или в Linux / macOS:
+
+```shell
+source .venv/bin/activate
+```
+
+Установите пакет проекта и зависимости разработки:
+
+```shell
+python -m pip install -e ".[dev]"
+```
+
+Если PowerShell запрещает запуск скрипта активации, можно использовать Python окружения напрямую: `.\.venv\Scripts\python.exe -m pip install -e ".[dev]"`.
+
+## Тестирование
+
+Из корня репозитория, в подготовленном окружении:
+
+```shell
+python -m pytest -q
+```
+
+Команда запускает все тесты из `tests/`. В PowerShell без активации: `.\.venv\Scripts\python.exe -m pytest -q`.
+
+Контракт Registry и границы его взаимодействия с Dispatcher описаны в [docs/registry.md](docs/registry.md).
+
+Конфигурация встроенного профиля `basic` находится в `core/profiles.py`. Registry возвращает пары `(tool, params)`; Dispatcher передаёт параметры через `ToolCall`, без знания конкретных файлов и разделов README.
