@@ -188,6 +188,49 @@ def test_unknown_tool_prevents_partial_profile_registration():
     assert registry.get_tools_for_profile("profile") == [(tool, {})]
 
 
+def test_copy_failure_on_second_entry_does_not_register_a_partial_profile():
+    copied_values = []
+
+    class CopyProbe:
+        def __init__(self, name, fail=False):
+            self.name = name
+            self.fail = fail
+
+        def __deepcopy__(self, memo):
+            copied_values.append(self.name)
+            if self.fail:
+                raise RuntimeError("Cannot copy second entry")
+            return self.name
+
+    registry = Registry()
+    first = StubTool("first")
+    second = StubTool("second")
+    registry.register(first)
+    registry.register(second)
+
+    with pytest.raises(RuntimeError, match="Cannot copy second entry"):
+        registry.register_profile(
+            "profile",
+            [
+                (first.name, {"value": CopyProbe("first")}),
+                (second.name, {"value": CopyProbe("second", fail=True)}),
+            ],
+        )
+
+    assert copied_values == ["first", "second"]
+    with pytest.raises(UnknownOperationError):
+        registry.get_tools_for_profile("profile")
+    assert registry.get(first.name) is first
+    assert registry.get(second.name) is second
+
+    registry.register_profile(
+        "profile", [(first.name, {"value": 1}), (second.name, {"value": 2})]
+    )
+    assert registry.get_tools_for_profile("profile") == [
+        (first, {"value": 1}), (second, {"value": 2})
+    ]
+
+
 def test_duplicate_profile_does_not_replace_its_tools():
     registry = Registry()
     first = StubTool("first")
