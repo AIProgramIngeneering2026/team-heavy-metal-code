@@ -1,14 +1,6 @@
 """Run configured profiles through the real Tool contract and implementations."""
 
-from importlib.util import find_spec
-
 import pytest
-
-if find_spec("core.tool_contract") is None:
-    pytest.skip(
-        "Requires Tool implementations from PR #27; run again after merging it",
-        allow_module_level=True,
-    )
 
 from core.profiles import register_basic_profile
 from core.registry import Registry

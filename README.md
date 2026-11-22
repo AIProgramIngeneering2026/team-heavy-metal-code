@@ -92,7 +92,7 @@ python -m pytest -q
 
 Команда запускает все тесты из `tests/`. В PowerShell без активации: `.\.venv\Scripts\python.exe -m pytest -q`.
 
-Интеграционные тесты Registry с настоящими Tool находятся в `tests/test_registry_tools_integration.py`. До объединения блока Tool (PR №27) этот модуль отмечается как пропущенный; после объединения все его проверки должны выполняться без пропусков.
+Интеграционные тесты Registry с настоящими Tool находятся в `tests/test_registry_tools_integration.py` и запускаются той же командой вместе с остальными тестами.
 
 Контракт Registry и границы его взаимодействия с Dispatcher описаны в [docs/registry.md](docs/registry.md).
 
