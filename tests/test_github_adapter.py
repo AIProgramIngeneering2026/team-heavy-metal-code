@@ -3,6 +3,8 @@ import base64
 import httpx
 import pytest
 
+from core.required_files import RequiredFilesTool
+from core.tool_contract import ToolCall
 from service.github import GitHub, GitHubError
 
 
@@ -19,6 +21,8 @@ def test_snapshot_uses_tree_and_readme_from_resolved_commit():
         (f"{REPO}/git/trees/{TREE}", {"truncated": False, "tree": [
             {"path": "README.md", "type": "blob", "mode": "100644", "sha": BLOB},
             {"path": "CONTRIBUTING.md", "type": "blob"},
+            {"path": "src", "type": "tree"},
+            {"path": "src/main.py", "type": "blob"},
         ]}),
         (f"{REPO}/git/blobs/{BLOB}", {
             "encoding": "base64", "content": base64.b64encode(readme.encode()).decode(),
@@ -31,6 +35,8 @@ def test_snapshot_uses_tree_and_readme_from_resolved_commit():
         assert request.url.path == path
         if path.endswith("/commits"):
             assert request.url.params["sha"] == "release/current"
+        if path == f"{REPO}/git/trees/{TREE}":
+            assert request.url.params["recursive"] == "1"
         return httpx.Response(200, json=body)
 
     with httpx.Client(transport=httpx.MockTransport(github)) as client:
@@ -38,8 +44,21 @@ def test_snapshot_uses_tree_and_readme_from_resolved_commit():
         snapshot = adapter.snapshot(URL, *adapter.resolve(URL))
     assert snapshot.commit_sha == COMMIT
     assert snapshot.repository_url == URL
-    assert set(snapshot.paths) == {"README.md", "CONTRIBUTING.md"}
+    assert set(snapshot.paths) == {"README.md", "CONTRIBUTING.md", "src/main.py"}
     assert snapshot.text_files == {"README.md": readme}
+    result = RequiredFilesTool().execute(ToolCall(snapshot, {"required_paths": ["src/main.py"]}))
+    assert result.results[0].status is True
+
+
+def test_truncated_tree_does_not_produce_a_snapshot():
+    def github(request):
+        assert request.url.path == f"{REPO}/git/trees/{TREE}"
+        return httpx.Response(200, json={"truncated": True, "tree": []})
+
+    with httpx.Client(transport=httpx.MockTransport(github)) as client:
+        with pytest.raises(GitHubError) as raised:
+            GitHub(client).snapshot(URL, REPO.lstrip("/"), COMMIT, TREE)
+    assert raised.value.code == "github_unavailable"
 
 
 @pytest.mark.parametrize(("status", "headers", "code"), [

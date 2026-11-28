@@ -78,9 +78,8 @@ class GitHub:
 
     def snapshot(self, url: str, repo: str, sha: str, tree_sha: str) -> RepositorySnapshot:
         try:
-            # The built-in profile uses only root files. The tree and blob
-            # are content-addressed by the commit resolved above.
-            tree = self._get(f"{repo}/git/trees/{tree_sha}")
+            # Include nested files from the tree of the resolved commit.
+            tree = self._get(f"{repo}/git/trees/{tree_sha}", recursive=1)
             if tree["truncated"]:
                 raise ValueError("Incomplete tree")
             files = {entry["path"]: entry for entry in tree["tree"] if entry["type"] == "blob"}
