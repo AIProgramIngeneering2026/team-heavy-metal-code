@@ -8,12 +8,13 @@ version = "0.1.0"
 description = "Domain core for checking educational GitHub repositories"
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = ["httpx>=0.28,<1"]
 
 [project.optional-dependencies]
 dev = ["pytest>=9,<10"]
 
 [tool.setuptools]
-packages = ["core"]
+packages = ["core", "service"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
