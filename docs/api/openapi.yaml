@@ -28,6 +28,7 @@ paths:
             type: string
             minLength: 1
             maxLength: 128
+            pattern: '\S'
       requestBody:
         required: true
         description: Размер всего JSON-тела не должен превышать 65536 байт.
@@ -68,7 +69,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "409":
-          description: Ключ идемпотентности использован с другими параметрами.
+          description: Конфликт ключа идемпотентности или недопустимая операция над Job.
           content:
             application/json:
               schema:
@@ -118,6 +119,15 @@ paths:
                       details:
                         - field: Idempotency-Key
                           issue: Must not exceed 128 characters.
+                unknownOperation:
+                  summary: Неизвестная операция в сервисе заданий
+                  value:
+                    error:
+                      code: unknown_operation
+                      message: Operation is not supported.
+                      details:
+                        - field: profile
+                          issue: No such operation is registered.
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -228,8 +238,10 @@ components:
         repository_url:
           type: string
           format: uri
+          minLength: 1
           maxLength: 2048
-          description: Ссылка на публичный репозиторий GitHub.
+          pattern: '^https://github\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]*[A-Za-z0-9_-][A-Za-z0-9_.-]*/?$'
+          description: HTTPS-ссылка на публичный репозиторий GitHub без параметров, фрагмента и учётных данных.
           example: https://github.com/example/coursework
         profile:
           type: string
@@ -440,13 +452,18 @@ components:
         отображаются как github_access_denied. HTTP 5xx, таймаут и сетевой
         отказ отображаются как github_unavailable. Если HTTP 403 нельзя
         отличить от превышения лимита, используется github_access_denied.
-        `interrupted` — задание прервано перезапуском сервиса
-        , не является отказом GitHub.
+        interrupted — задание прервано перезапуском сервиса.
+        invalid_tool_parameters и snapshot_incomplete — технические ошибки Tool.
+        tool_execution_failed — непредвиденное исключение или ответ Tool не по контракту.
       enum:
         - repository_not_found
         - github_access_denied
         - github_rate_limited
         - github_unavailable
+        - interrupted
+        - invalid_tool_parameters
+        - snapshot_incomplete
+        - tool_execution_failed
 
     Recommendations:
       oneOf:

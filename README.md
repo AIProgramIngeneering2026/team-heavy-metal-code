@@ -97,3 +97,19 @@ python -m pytest -q
 Контракт Registry и границы его взаимодействия с Dispatcher описаны в [docs/registry.md](docs/registry.md).
 
 Конфигурация встроенного профиля `basic` находится в `core/profiles.py`. Registry возвращает пары `(tool, params)`; Dispatcher передаёт параметры через `ToolCall`, без знания конкретных файлов и разделов README.
+
+## HTTP API (практика 4)
+
+HTTP-адаптер предоставляет `POST /jobs` и `GET /jobs/{job_id}`. Контракт находится в [docs/api/openapi.yaml](docs/api/openapi.yaml); тесты в [tests/api](tests/api) проверяют реальные HTTP-ответы по этому файлу. Правила переходов состояний остаются в `core.Job`.
+
+После установки зависимостей можно запустить адаптер для просмотра Swagger:
+
+```shell
+python -m uvicorn api.app:app --host 127.0.0.1 --port 8000
+```
+
+Swagger UI доступен по адресу <http://127.0.0.1:8000/docs>, сгенерированная схема — <http://127.0.0.1:8000/openapi.json>.
+
+В этой точке входа пока не подключён сервис хранения и выполнения: корректные запросы к `/jobs` вернут `500 internal_error`. Для рабочего запуска точка сборки должна передать реализацию `JobService` в `create_app(service=...)`. База, миграции, обработчик заданий и адаптер GitHub подключаются отдельными блоками p4. Интерфейс для согласования и пример сборки описаны в [docs/http-api.md](docs/http-api.md).
+
+Все тесты, включая HTTP и проверку OpenAPI, запускаются общей командой `python -m pytest -q` из раздела «Тестирование». Они не требуют сети и базы данных. Только HTTP-тесты: `python -m pytest tests/api -q`.
