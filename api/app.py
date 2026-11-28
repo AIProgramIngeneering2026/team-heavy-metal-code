@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
+from starlette.types import Lifespan
 
 from application.contracts import JobService
 from application.errors import IdempotencyConflictError, InvalidJobParametersError, JobNotFoundError
@@ -26,10 +27,13 @@ Service = Annotated[JobService | None, Depends(get_job_service)]
 IdempotencyKey = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128, pattern=r"\S")]
 
 
-def create_app(service: JobService | None = None) -> FastAPI:
+def create_app(
+    service: JobService | None = None, *, lifespan: Lifespan[FastAPI] | None = None,
+) -> FastAPI:
+    """Build HTTP routes; the composition lifespan owns workers and resources."""
     app = FastAPI(
         title="Учебный сервис проверки репозиториев", version="1.0.0",
-        redirect_slashes=False, debug=False,
+        redirect_slashes=False, debug=False, lifespan=lifespan,
     )
     app.state.job_service = service
     app.add_middleware(RequestBodyMiddleware)
